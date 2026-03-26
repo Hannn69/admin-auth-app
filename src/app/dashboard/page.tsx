@@ -30,7 +30,7 @@ export default function DashboardPage() {
           setEmail(data.user?.email ?? null);
         }
       } catch {
-        router.replace("/login");
+        router.replace("/signin");
       } finally {
         if (active) {
           setLoading(false);

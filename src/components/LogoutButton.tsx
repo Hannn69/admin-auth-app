@@ -22,7 +22,7 @@ export function LogoutButton() {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || "Failed to log out.");
       }
-      router.replace("/login");
+      router.replace("/signin");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to log out.");
     } finally {
