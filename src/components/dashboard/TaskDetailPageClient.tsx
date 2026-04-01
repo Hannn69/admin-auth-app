@@ -4,9 +4,13 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
-import { DashboardContent } from "@/components/dashboard/DashboardContent";
+import { TaskDetailContent } from "@/components/dashboard/TaskDetailContent";
 
-export default function DashboardPage() {
+type TaskDetailPageClientProps = {
+  slug: string;
+};
+
+export function TaskDetailPageClient({ slug }: TaskDetailPageClientProps) {
   const router = useRouter();
   const apiBase = process.env.NEXT_PUBLIC_API_URL || "";
   const [email, setEmail] = useState<string | null>(null);
@@ -57,8 +61,12 @@ export default function DashboardPage() {
         <DashboardSidebar />
 
         <div className="flex flex-1 flex-col gap-6">
-          <DashboardHeader loading={loading} email={email} title="Home" />
-          <DashboardContent />
+          <DashboardHeader
+            loading={loading}
+            email={email}
+            title="Task details"
+          />
+          <TaskDetailContent slug={slug} />
         </div>
       </div>
     </div>

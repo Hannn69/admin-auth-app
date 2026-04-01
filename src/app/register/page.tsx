@@ -44,9 +44,9 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950">
+    <div className="min-h-screen bg-zinc-950 bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-800">
       <div className="grid min-h-screen grid-cols-1 lg:grid-cols-[1.2fr_1fr]">
-        <div className="relative hidden items-center justify-center overflow-hidden bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-800 px-10 lg:flex">
+        <div className="relative hidden items-center justify-center overflow-hidden px-10 lg:flex">
           <div className="absolute -left-24 -top-24 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
           <div className="absolute -bottom-32 left-32 h-80 w-80 rounded-full bg-emerald-400/10 blur-3xl" />
           <div className="relative z-10 max-w-md">
