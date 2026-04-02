@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -15,6 +16,88 @@ type CreateTaskModalProps = {
 };
 
 export function CreateTaskModal({ open, onClose }: CreateTaskModalProps) {
+  const apiBase = process.env.NEXT_PUBLIC_API_URL || "";
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [createAnother, setCreateAnother] = useState(false);
+  const [form, setForm] = useState({
+    space: "task (TASK)",
+    workType: "Task",
+    status: "To do",
+    summary: "",
+    description: "",
+    assignee: "",
+    reporter: "sonvirak",
+    priority: "Medium",
+    labels: "",
+    dueDate: "",
+    startDate: "",
+    category: "",
+    team: "",
+  });
+
+  const updateForm = (key: keyof typeof form, value: string) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleSubmit = async () => {
+    if (!form.summary.trim()) {
+      setError("Summary is required.");
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      const attemptCreate = () =>
+        fetch(`${apiBase}/task/create`, {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(form),
+        });
+
+      let res = await attemptCreate();
+      if (res.status === 401) {
+        const refresh = await fetch(`${apiBase}/auth/refresh`, {
+          method: "POST",
+          credentials: "include",
+        });
+        if (refresh.ok) {
+          res = await attemptCreate();
+        }
+      }
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to create task.");
+      }
+
+      window.dispatchEvent(new CustomEvent("task:created"));
+
+      if (createAnother) {
+        setForm((prev) => ({
+          ...prev,
+          summary: "",
+          description: "",
+          labels: "",
+          dueDate: "",
+          startDate: "",
+          category: "",
+          team: "",
+        }));
+      } else {
+        onClose();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create task.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <Dialog
       open={open}
@@ -40,7 +123,11 @@ export function CreateTaskModal({ open, onClose }: CreateTaskModalProps) {
                 <label className="text-xs text-zinc-400">
                   Space <span className="text-rose-300">*</span>
                 </label>
-                <select className="mt-2 w-full rounded-xl border border-white/10 bg-[#23252a] px-3 py-2 text-sm text-zinc-100">
+                <select
+                  className="mt-2 w-full rounded-xl border border-white/10 bg-[#23252a] px-3 py-2 text-sm text-zinc-100"
+                  value={form.space}
+                  onChange={(event) => updateForm("space", event.target.value)}
+                >
                   <option>task (TASK)</option>
                   <option>platform (PLAT)</option>
                 </select>
@@ -50,7 +137,13 @@ export function CreateTaskModal({ open, onClose }: CreateTaskModalProps) {
                 <label className="text-xs text-zinc-400">
                   Work type <span className="text-rose-300">*</span>
                 </label>
-                <select className="mt-2 w-full rounded-xl border border-white/10 bg-[#23252a] px-3 py-2 text-sm text-zinc-100">
+                <select
+                  className="mt-2 w-full rounded-xl border border-white/10 bg-[#23252a] px-3 py-2 text-sm text-zinc-100"
+                  value={form.workType}
+                  onChange={(event) =>
+                    updateForm("workType", event.target.value)
+                  }
+                >
                   <option>Task</option>
                   <option>Bug</option>
                   <option>Story</option>
@@ -62,7 +155,11 @@ export function CreateTaskModal({ open, onClose }: CreateTaskModalProps) {
 
               <div>
                 <label className="text-xs text-zinc-400">Status</label>
-                <select className="mt-2 w-full rounded-xl border border-white/10 bg-[#23252a] px-3 py-2 text-sm text-zinc-100">
+                <select
+                  className="mt-2 w-full rounded-xl border border-white/10 bg-[#23252a] px-3 py-2 text-sm text-zinc-100"
+                  value={form.status}
+                  onChange={(event) => updateForm("status", event.target.value)}
+                >
                   <option>To do</option>
                   <option>In progress</option>
                   <option>Done</option>
@@ -80,6 +177,10 @@ export function CreateTaskModal({ open, onClose }: CreateTaskModalProps) {
                   className="mt-2 w-full rounded-xl border border-rose-400/60 bg-[#23252a] px-3 py-2 text-sm text-zinc-100"
                   placeholder="Summary is required"
                   type="text"
+                  value={form.summary}
+                  onChange={(event) =>
+                    updateForm("summary", event.target.value)
+                  }
                 />
               </div>
 
@@ -99,6 +200,10 @@ export function CreateTaskModal({ open, onClose }: CreateTaskModalProps) {
                   <textarea
                     className="min-h-[140px] w-full bg-transparent px-3 py-3 text-sm text-zinc-200 outline-none"
                     placeholder="Type /ai for Atlassian Intelligence or @ to mention someone."
+                    value={form.description}
+                    onChange={(event) =>
+                      updateForm("description", event.target.value)
+                    }
                   />
                 </div>
               </div>
@@ -109,6 +214,10 @@ export function CreateTaskModal({ open, onClose }: CreateTaskModalProps) {
                   <input
                     className="mt-2 w-full rounded-xl border border-white/10 bg-[#23252a] px-3 py-2 text-sm text-zinc-100"
                     placeholder="Automatic"
+                    value={form.assignee}
+                    onChange={(event) =>
+                      updateForm("assignee", event.target.value)
+                    }
                   />
                 </div>
                 <div>
@@ -118,6 +227,10 @@ export function CreateTaskModal({ open, onClose }: CreateTaskModalProps) {
                   <input
                     className="mt-2 w-full rounded-xl border border-white/10 bg-[#23252a] px-3 py-2 text-sm text-zinc-100"
                     placeholder="sonvirak"
+                    value={form.reporter}
+                    onChange={(event) =>
+                      updateForm("reporter", event.target.value)
+                    }
                   />
                 </div>
               </div>
@@ -125,17 +238,27 @@ export function CreateTaskModal({ open, onClose }: CreateTaskModalProps) {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label className="text-xs text-zinc-400">Priority</label>
-                  <select className="mt-2 w-full rounded-xl border border-white/10 bg-[#23252a] px-3 py-2 text-sm text-zinc-100">
-                    <option>Medium</option>
-                    <option>High</option>
-                    <option>Low</option>
-                  </select>
+                <select
+                  className="mt-2 w-full rounded-xl border border-white/10 bg-[#23252a] px-3 py-2 text-sm text-zinc-100"
+                  value={form.priority}
+                  onChange={(event) =>
+                    updateForm("priority", event.target.value)
+                  }
+                >
+                  <option>Medium</option>
+                  <option>High</option>
+                  <option>Low</option>
+                </select>
                 </div>
                 <div>
                   <label className="text-xs text-zinc-400">Labels</label>
                   <input
                     className="mt-2 w-full rounded-xl border border-white/10 bg-[#23252a] px-3 py-2 text-sm text-zinc-100"
                     placeholder="Select label"
+                    value={form.labels}
+                    onChange={(event) =>
+                      updateForm("labels", event.target.value)
+                    }
                   />
                 </div>
               </div>
@@ -147,6 +270,10 @@ export function CreateTaskModal({ open, onClose }: CreateTaskModalProps) {
                     className="mt-2 w-full rounded-xl border border-white/10 bg-[#23252a] px-3 py-2 text-sm text-zinc-100"
                     placeholder="Select date"
                     type="date"
+                    value={form.dueDate}
+                    onChange={(event) =>
+                      updateForm("dueDate", event.target.value)
+                    }
                   />
                 </div>
                 <div>
@@ -167,11 +294,21 @@ export function CreateTaskModal({ open, onClose }: CreateTaskModalProps) {
                     className="mt-2 w-full rounded-xl border border-white/10 bg-[#23252a] px-3 py-2 text-sm text-zinc-100"
                     placeholder="Select date"
                     type="date"
+                    value={form.startDate}
+                    onChange={(event) =>
+                      updateForm("startDate", event.target.value)
+                    }
                   />
                 </div>
                 <div>
                   <label className="text-xs text-zinc-400">Category</label>
-                  <select className="mt-2 w-full rounded-xl border border-white/10 bg-[#23252a] px-3 py-2 text-sm text-zinc-100">
+                  <select
+                    className="mt-2 w-full rounded-xl border border-white/10 bg-[#23252a] px-3 py-2 text-sm text-zinc-100"
+                    value={form.category}
+                    onChange={(event) =>
+                      updateForm("category", event.target.value)
+                    }
+                  >
                     <option>Select...</option>
                     <option>Admin</option>
                     <option>Security</option>
@@ -181,35 +318,48 @@ export function CreateTaskModal({ open, onClose }: CreateTaskModalProps) {
 
               <div>
                 <label className="text-xs text-zinc-400">Team</label>
-                <input
-                  className="mt-2 w-full rounded-xl border border-white/10 bg-[#23252a] px-3 py-2 text-sm text-zinc-100"
-                  placeholder="Choose a team"
-                />
-              </div>
+              <input
+                className="mt-2 w-full rounded-xl border border-white/10 bg-[#23252a] px-3 py-2 text-sm text-zinc-100"
+                placeholder="Choose a team"
+                value={form.team}
+                onChange={(event) => updateForm("team", event.target.value)}
+              />
             </div>
+            {error ? (
+              <p className="text-sm text-rose-300">{error}</p>
+            ) : null}
           </div>
+        </div>
 
-          <DialogFooter className="border-t border-white/10 px-5 py-4 text-xs text-zinc-400 sm:items-center sm:justify-between">
-            <label className="flex items-center gap-2">
-              <input type="checkbox" className="accent-blue-500" />
-              Create another
-            </label>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-full border border-white/10 px-4 py-2 text-xs text-zinc-300 hover:bg-white/10"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="rounded-full bg-blue-500 px-5 py-2 text-xs font-semibold text-white hover:bg-blue-400"
-              >
-                Create
-              </button>
-            </div>
-          </DialogFooter>
+        <DialogFooter className="border-t border-white/10 px-5 py-4 text-xs text-zinc-400 sm:items-center sm:justify-between">
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              className="accent-blue-500"
+              checked={createAnother}
+              onChange={(event) => setCreateAnother(event.target.checked)}
+            />
+            Create another
+          </label>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-full border border-white/10 px-4 py-2 text-xs text-zinc-300 hover:bg-white/10"
+              disabled={submitting}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="rounded-full bg-blue-500 px-5 py-2 text-xs font-semibold text-white hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={handleSubmit}
+              disabled={submitting}
+            >
+              {submitting ? "Creating..." : "Create"}
+            </button>
+          </div>
+        </DialogFooter>
         </div>
       </DialogContent>
     </Dialog>

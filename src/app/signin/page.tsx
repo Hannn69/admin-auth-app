@@ -18,7 +18,7 @@ export default function SigninPage() {
     setError(null);
 
     try {
-      const res = await fetch(`${apiBase}/auth/login`, {
+      const res = await fetch(`${apiBase}/auth/signin`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

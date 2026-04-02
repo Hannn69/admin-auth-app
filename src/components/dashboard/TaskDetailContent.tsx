@@ -1,8 +1,220 @@
-type TaskDetailContentProps = {
-  slug: string;
+"use client";
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+
+type Subtask = {
+  id: number;
+  title: string;
+  priority: "Low" | "Medium" | "High";
+  assignee: string;
+  status: "To do" | "In progress" | "Done";
 };
 
-export function TaskDetailContent({ slug }: TaskDetailContentProps) {
+const normalizeSubtasks = (value: unknown) => {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  const normalized: Subtask[] = [];
+  value.forEach((item, index) => {
+    if (!item || typeof item !== "object") {
+      return;
+    }
+    const record = item as Record<string, unknown>;
+    const title =
+      typeof record.title === "string" ? record.title.trim() : "";
+    if (!title) {
+      return;
+    }
+    let id = index + 1;
+    if (typeof record.id === "number" && Number.isFinite(record.id)) {
+      id = record.id;
+    } else if (typeof record.id === "string") {
+      const parsed = Number(record.id);
+      if (Number.isFinite(parsed)) {
+        id = parsed;
+      }
+    }
+    const priority =
+      record.priority === "High" ||
+      record.priority === "Low" ||
+      record.priority === "Medium"
+        ? record.priority
+        : "Medium";
+    const status =
+      record.status === "In progress" ||
+      record.status === "Done" ||
+      record.status === "To do"
+        ? record.status
+        : "To do";
+    const assignee =
+      typeof record.assignee === "string" && record.assignee.trim()
+        ? record.assignee.trim()
+        : "Unassigned";
+    normalized.push({
+      id,
+      title,
+      priority,
+      assignee,
+      status,
+    });
+  });
+  return normalized;
+};
+
+type TaskDetailContentProps = {
+  slug: string;
+  task?: {
+    key: string;
+    summary: string;
+    status: string;
+    priority?: string | null;
+    assignee?: string | null;
+    reporter?: string | null;
+    description?: string | null;
+    labels?: string | null;
+    dueDate?: string | null;
+    startDate?: string | null;
+    category?: string | null;
+    team?: string | null;
+    subtasks?: unknown;
+  } | null;
+  onEdit?: () => void;
+};
+
+export function TaskDetailContent({
+  slug,
+  task,
+  onEdit,
+}: TaskDetailContentProps) {
+  const apiBase = process.env.NEXT_PUBLIC_API_URL || "";
+  const initialSubtasks = useMemo<Subtask[]>(
+    () => [
+      {
+        id: 2,
+        title: "Capture API requirements",
+        priority: "Medium",
+        assignee: "Unassigned",
+        status: "To do",
+      },
+      {
+        id: 3,
+        title: "Design empty state assets",
+        priority: "Medium",
+        assignee: "Unassigned",
+        status: "To do",
+      },
+    ],
+    []
+  );
+  const [subtasks, setSubtasks] = useState<Subtask[]>(initialSubtasks);
+  const [showSubtaskInput, setShowSubtaskInput] = useState(false);
+  const [subtaskTitle, setSubtaskTitle] = useState("");
+  const [subtaskError, setSubtaskError] = useState<string | null>(null);
+  const [savingSubtasks, setSavingSubtasks] = useState(false);
+  const nextSubtaskId = useRef(
+    Math.max(...initialSubtasks.map((item) => item.id), 1) + 1
+  );
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (task?.key) {
+      const normalized = normalizeSubtasks(task.subtasks);
+      if (normalized) {
+        setSubtasks(normalized);
+        const maxId = Math.max(...normalized.map((item) => item.id), 0);
+        nextSubtaskId.current = maxId + 1;
+      } else {
+        setSubtasks([]);
+        nextSubtaskId.current = 1;
+      }
+      return;
+    }
+    setSubtasks(initialSubtasks);
+  }, [initialSubtasks, task]);
+
+  useEffect(() => {
+    if (showSubtaskInput) {
+      inputRef.current?.focus();
+    }
+  }, [showSubtaskInput]);
+
+  const keyPrefix = useMemo(() => {
+    const rawKey = (task?.key ?? slug ?? "TASK").toUpperCase();
+    const prefix = rawKey.split("-")[0];
+    return prefix || "TASK";
+  }, [task?.key, slug]);
+
+  const handleAddSubtask = () => {
+    const trimmed = subtaskTitle.trim();
+    if (!trimmed) {
+      return;
+    }
+    const newSubtask: Subtask = {
+      id: nextSubtaskId.current,
+      title: trimmed,
+      priority: "Medium",
+      assignee: "Unassigned",
+      status: "To do",
+    };
+    nextSubtaskId.current += 1;
+    const nextSubtasks = [...subtasks, newSubtask];
+    setSubtasks(nextSubtasks);
+    setSubtaskTitle("");
+    setShowSubtaskInput(true);
+    if (task?.key) {
+      setSavingSubtasks(true);
+      setSubtaskError(null);
+      const attemptUpdate = () =>
+        fetch(`${apiBase}/task/${task.key}`, {
+          method: "PATCH",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ subtasks: nextSubtasks }),
+        });
+      attemptUpdate()
+        .then(async (res) => {
+          if (res.status === 401) {
+            const refresh = await fetch(`${apiBase}/auth/refresh`, {
+              method: "POST",
+              credentials: "include",
+            });
+            if (refresh.ok) {
+              return attemptUpdate();
+            }
+          }
+          return res;
+        })
+        .then((res) => {
+          if (!res.ok) {
+            throw new Error("Failed to save subtask.");
+          }
+          window.dispatchEvent(new CustomEvent("task:updated"));
+        })
+        .catch((err) => {
+          setSubtaskError(
+            err instanceof Error ? err.message : "Failed to save subtask."
+          );
+        })
+        .finally(() => {
+          setSavingSubtasks(false);
+        });
+    }
+  };
+  const title = task?.summary ?? slug.replace("-", " ").toUpperCase();
+  const status = task?.status ?? "To do";
+  const priority = task?.priority ?? "Medium";
+  const assignee = task?.assignee ?? "Unassigned";
+  const reporter = task?.reporter ?? "sonvirak";
   return (
     <main className="flex flex-1 flex-col gap-6 rounded-2xl border border-white/10 bg-white/[0.04] p-4 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.02)] backdrop-blur sm:p-6">
       <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-400">
@@ -12,7 +224,7 @@ export function TaskDetailContent({ slug }: TaskDetailContentProps) {
         <span>/</span>
         <span>Task</span>
         <span>/</span>
-        <span className="text-zinc-200">{slug.toUpperCase()}</span>
+        <span className="text-zinc-200">{(task?.key ?? slug).toUpperCase()}</span>
       </div>
 
       <div className="flex flex-col gap-6 xl:flex-row">
@@ -23,10 +235,10 @@ export function TaskDetailContent({ slug }: TaskDetailContentProps) {
             </div>
             <div>
               <h2 className="text-2xl font-semibold text-zinc-100">
-                {slug.replace("-", " ").toUpperCase()}
+                {title}
               </h2>
               <p className="text-sm text-zinc-400">
-                Build out the task detail experience.
+                {task?.summary ? "Task detail overview." : "Build out the task detail experience."}
               </p>
             </div>
           </div>
@@ -37,13 +249,15 @@ export function TaskDetailContent({ slug }: TaskDetailContentProps) {
               <button
                 className="rounded-full border border-white/10 px-3 py-1 text-xs text-zinc-300 hover:bg-white/5"
                 type="button"
+                onClick={onEdit}
               >
                 Edit
               </button>
             </div>
             <p className="mt-3 text-sm text-zinc-300">
-              Draft the requirements, acceptance criteria, and dependencies for
-              this work item.
+              {task?.description?.trim()
+                ? task.description
+                : "Draft the requirements, acceptance criteria, and dependencies for this work item."}
             </p>
           </div>
 
@@ -53,40 +267,110 @@ export function TaskDetailContent({ slug }: TaskDetailContentProps) {
               <button
                 className="rounded-full border border-white/10 px-3 py-1 text-xs text-zinc-300 hover:bg-white/5"
                 type="button"
+                onClick={() => setShowSubtaskInput(true)}
               >
                 Add subtask
               </button>
             </div>
-            <div className="mt-4 flex flex-col gap-2 text-sm text-zinc-400">
-              <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
-                Capture API requirements
-              </div>
-              <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
-                Design empty state assets
-              </div>
+            <div className="mt-4 rounded-2xl border border-white/10 bg-white/5">
+              <Table className="text-xs">
+                <TableHeader className="bg-black/30">
+                  <TableRow className="border-white/10">
+                    <TableHead className="px-4 py-3 text-[10px] tracking-[0.2em]">
+                      Work
+                    </TableHead>
+                    <TableHead className="px-4 py-3 text-[10px] tracking-[0.2em]">
+                      Priority
+                    </TableHead>
+                    <TableHead className="px-4 py-3 text-[10px] tracking-[0.2em]">
+                      Assignee
+                    </TableHead>
+                    <TableHead className="px-4 py-3 text-[10px] tracking-[0.2em]">
+                      Status
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {subtasks.map((item) => (
+                    <TableRow
+                      key={item.id}
+                      className="border-white/10 hover:bg-white/5"
+                    >
+                      <TableCell className="px-4">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-semibold text-blue-300">
+                            {keyPrefix}-{item.id}
+                          </span>
+                          <span className="text-sm text-zinc-200">
+                            {item.title}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="px-4 text-zinc-200">
+                        <span className="inline-flex items-center gap-2">
+                          <span className="h-2 w-2 rounded-full bg-amber-400" />
+                          {item.priority}
+                        </span>
+                      </TableCell>
+                      <TableCell className="px-4 text-zinc-200">
+                        <span className="inline-flex items-center gap-2">
+                          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/10 text-[10px] text-zinc-300">
+                            ?
+                          </span>
+                          {item.assignee}
+                        </span>
+                      </TableCell>
+                      <TableCell className="px-4 text-zinc-200">
+                        <span className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-200">
+                          {item.status}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
-          </div>
-
-          <div className="rounded-2xl border border-white/10 bg-black/40 p-5">
-            <h3 className="text-sm font-semibold text-zinc-100">
-              Linked work items
-            </h3>
-            <div className="mt-4 flex flex-wrap gap-2 text-xs text-zinc-300">
-              {["AUTH-10", "UI-42", "OPS-7"].map((item) => (
-                <span
-                  key={item}
-                  className="rounded-full border border-white/10 bg-white/5 px-3 py-1"
-                >
-                  {item}
-                </span>
-              ))}
-              <button
-                className="rounded-full border border-dashed border-white/20 px-3 py-1 text-zinc-500"
-                type="button"
+            {showSubtaskInput ? (
+              <form
+                className="mt-4 rounded-2xl border border-blue-400/40 bg-black/30 p-3"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  handleAddSubtask();
+                }}
               >
-                Add linked work item
-              </button>
-            </div>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <input
+                    ref={inputRef}
+                    className="flex-1 rounded-xl border border-white/10 bg-[#23252a] px-3 py-2 text-sm text-zinc-100 outline-none focus:border-blue-400/60"
+                    placeholder="What needs to be done?"
+                    value={subtaskTitle}
+                    onChange={(event) => setSubtaskTitle(event.target.value)}
+                  />
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="submit"
+                      className="rounded-full bg-blue-500 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={savingSubtasks}
+                    >
+                      {savingSubtasks ? "Saving..." : "Add subtask"}
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-full border border-white/10 px-4 py-2 text-xs text-zinc-300 hover:bg-white/5"
+                      onClick={() => {
+                        setShowSubtaskInput(false);
+                        setSubtaskTitle("");
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+                {subtaskError ? (
+                  <p className="mt-2 text-xs text-rose-300">{subtaskError}</p>
+                ) : null}
+              </form>
+            ) : null}
           </div>
 
           <div className="rounded-2xl border border-white/10 bg-black/40 p-5">
@@ -152,15 +436,16 @@ export function TaskDetailContent({ slug }: TaskDetailContentProps) {
               </div>
               <div className="mt-4 space-y-3 text-sm text-zinc-300">
                 {[
-                  ["Assignee", "Unassigned"],
-                  ["Reporter", "sonvirak"],
-                  ["Priority", "Medium"],
-                  ["Labels", "None"],
-                  ["Due date", "None"],
+                  ["Status", status],
+                  ["Assignee", assignee],
+                  ["Reporter", reporter],
+                  ["Priority", priority],
+                  ["Labels", task?.labels ?? "None"],
+                  ["Due date", task?.dueDate ? task.dueDate.slice(0, 10) : "None"],
                   ["Time tracking", "No time logged"],
-                  ["Start date", "None"],
-                  ["Category", "Add option"],
-                  ["Team", "None"],
+                  ["Start date", task?.startDate ? task.startDate.slice(0, 10) : "None"],
+                  ["Category", task?.category ?? "Add option"],
+                  ["Team", task?.team ?? "None"],
                 ].map(([label, value]) => (
                   <div key={label} className="flex items-center justify-between">
                     <span className="text-xs text-zinc-500">{label}</span>
