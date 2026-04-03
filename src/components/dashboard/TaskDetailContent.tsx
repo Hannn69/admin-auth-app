@@ -288,6 +288,9 @@ export function TaskDetailContent({
                     <TableHead className="px-4 py-3 text-[10px] tracking-[0.2em]">
                       Status
                     </TableHead>
+                    <TableHead className="px-4 py-3 text-[10px] tracking-[0.2em]">
+                      Action
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -324,6 +327,28 @@ export function TaskDetailContent({
                         <span className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-200">
                           {item.status}
                         </span>
+                      </TableCell>
+                      <TableCell className="px-4 text-zinc-200">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            className="rounded-full border border-white/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-300 hover:bg-white/5"
+                          >
+                            View
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded-full border border-white/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-300 hover:bg-white/5"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded-full border border-rose-300/40 bg-rose-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-rose-200 hover:bg-rose-500/20"
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
