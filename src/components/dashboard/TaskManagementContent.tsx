@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { UpdateTaskModal } from "@/components/dashboard/UpdateTaskModal";
 import { DeleteTaskModal } from "@/components/dashboard/DeleteTaskModal";
 import {
@@ -119,7 +120,18 @@ const priorityStyles: Record<string, string> = {
   Low: "bg-emerald-500/15 text-emerald-200",
 };
 
-export function TaskManagementContent() {
+type TaskManagementContentProps = {
+  spaceKey?: string;
+  spaceName?: string;
+  lockSpace?: boolean;
+};
+
+export function TaskManagementContent({
+  spaceKey,
+  spaceName,
+  lockSpace = false,
+}: TaskManagementContentProps) {
+  const searchParams = useSearchParams();
   const apiBase = process.env.NEXT_PUBLIC_API_URL || "";
   const [tasks, setTasks] = useState<typeof seedTasks>(seedTasks);
   const [total, setTotal] = useState(seedTasks.length);
@@ -130,6 +142,11 @@ export function TaskManagementContent() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
+  const [spaceFilter, setSpaceFilter] = useState("");
+  const [spaces, setSpaces] = useState<Array<{ name: string; key: string }>>(
+    []
+  );
+  const [spacesLoaded, setSpacesLoaded] = useState(false);
   const [editTask, setEditTask] = useState<(typeof seedTasks)[number] | null>(
     null
   );
@@ -146,6 +163,56 @@ export function TaskManagementContent() {
   }, [search]);
 
   useEffect(() => {
+    if (lockSpace && spaceKey) {
+      setSpaceFilter(spaceKey);
+      return;
+    }
+    const param = searchParams?.get("space") ?? "";
+    setSpaceFilter(param);
+  }, [lockSpace, searchParams, spaceKey]);
+
+  const resolvedSpaceLabel = useMemo(() => {
+    if (!spaceFilter) {
+      return "";
+    }
+    if (spaceName && spaceKey && spaceFilter === spaceKey) {
+      return `${spaceName} (${spaceKey})`;
+    }
+    const match = spaces.find((space) => space.key === spaceFilter);
+    return match ? `${match.name} (${match.key})` : spaceFilter;
+  }, [spaceFilter, spaces, spaceName, spaceKey]);
+
+  useEffect(() => {
+    if (spacesLoaded) {
+      return;
+    }
+    const loadSpaces = async () => {
+      try {
+        const res = await fetch(`${apiBase}/spaces?limit=50`, {
+          credentials: "include",
+        });
+        if (!res.ok) {
+          return;
+        }
+        const data = await res.json();
+        if (!Array.isArray(data.spaces)) {
+          return;
+        }
+        setSpaces(
+          data.spaces.map((space: any) => ({
+            name: space.name,
+            key: space.key,
+          }))
+        );
+        setSpacesLoaded(true);
+      } catch {
+        // ignore
+      }
+    };
+    loadSpaces();
+  }, [apiBase, spacesLoaded]);
+
+  useEffect(() => {
     const loadTasks = async () => {
       try {
         const params = new URLSearchParams({
@@ -159,6 +226,9 @@ export function TaskManagementContent() {
         }
         if (statusFilter !== "All") {
           params.set("status", statusFilter);
+        }
+        if (spaceFilter) {
+          params.set("space", spaceFilter);
         }
         const res = await fetch(`${apiBase}/tasks?${params.toString()}`, {
           credentials: "include",
@@ -188,11 +258,11 @@ export function TaskManagementContent() {
           category: task.category ?? "",
           team: task.team ?? "",
         }));
-        if (mapped.length) {
-          setTasks(mapped);
-        }
+        setTasks(mapped);
         if (typeof data.total === "number") {
           setTotal(data.total);
+        } else {
+          setTotal(mapped.length);
         }
       } catch {
         // keep seed tasks on failure
@@ -209,7 +279,16 @@ export function TaskManagementContent() {
       window.removeEventListener("task:updated", handler);
       window.removeEventListener("task:deleted", handler);
     };
-  }, [apiBase, page, limit, sort, order, debouncedSearch, statusFilter]);
+  }, [
+    apiBase,
+    page,
+    limit,
+    sort,
+    order,
+    debouncedSearch,
+    statusFilter,
+    spaceFilter,
+  ]);
 
   const formatRelative = (value?: string) => {
     if (!value) {
@@ -232,7 +311,14 @@ export function TaskManagementContent() {
   return (
     <main className="flex flex-1 flex-col gap-6 rounded-2xl border border-white/10 bg-white/[0.04] p-4 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.02)] backdrop-blur sm:p-6">
       <div className="flex flex-col gap-2">
-        <p className="text-sm text-zinc-400">Your work / Task management</p>
+        <p className="text-sm text-zinc-400">
+          Your work / Task management
+          {resolvedSpaceLabel ? (
+            <span className="ml-2 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] text-zinc-300">
+              {resolvedSpaceLabel}
+            </span>
+          ) : null}
+        </p>
         <h2 className="text-lg font-semibold text-zinc-100">
           Jira-style task listing
         </h2>

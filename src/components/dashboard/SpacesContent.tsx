@@ -319,9 +319,12 @@ export function SpacesContent() {
                       >
                         {space.name.slice(0, 1).toUpperCase()}
                       </div>
-                      <span className="text-sm text-zinc-100">
+                      <Link
+                        href={`/spaces/${space.slug}/tasks`}
+                        className="text-sm text-zinc-100 hover:text-white"
+                      >
                         {space.name}
-                      </span>
+                      </Link>
                     </div>
                   </TableCell>
                   <TableCell className="px-3 text-xs font-semibold text-zinc-300">

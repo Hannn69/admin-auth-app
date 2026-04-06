@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Dialog,
   DialogContent,
@@ -13,13 +14,27 @@ import {
 type CreateTaskModalProps = {
   open: boolean;
   onClose: () => void;
+  spaces?: Array<{ name: string; key: string }>;
+  defaultSpace?: string;
+  lockSpace?: boolean;
 };
 
-export function CreateTaskModal({ open, onClose }: CreateTaskModalProps) {
+export function CreateTaskModal({
+  open,
+  onClose,
+  spaces = [],
+  defaultSpace,
+  lockSpace = false,
+}: CreateTaskModalProps) {
+  const searchParams = useSearchParams();
   const apiBase = process.env.NEXT_PUBLIC_API_URL || "";
+  const [internalSpaces, setInternalSpaces] = useState<
+    Array<{ name: string; key: string }>
+  >([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createAnother, setCreateAnother] = useState(false);
+  const [spaceTouched, setSpaceTouched] = useState(false);
   const [form, setForm] = useState({
     space: "task (TASK)",
     workType: "Task",
@@ -39,6 +54,74 @@ export function CreateTaskModal({ open, onClose }: CreateTaskModalProps) {
   const updateForm = (key: keyof typeof form, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
+
+  const effectiveSpaces = spaces.length ? spaces : internalSpaces;
+
+  const spaceOptions = effectiveSpaces.length
+    ? effectiveSpaces.map((space) => ({
+        label: `${space.name} (${space.key})`,
+        value: `${space.name} (${space.key})`,
+      }))
+    : [
+        { label: "task (TASK)", value: "task (TASK)" },
+        { label: "platform (PLAT)", value: "platform (PLAT)" },
+      ];
+
+  const derivedDefaultSpace = useMemo(() => {
+    if (
+      defaultSpace &&
+      spaceOptions.some((option) => option.value === defaultSpace)
+    ) {
+      return defaultSpace;
+    }
+    const spaceKey = searchParams?.get("space");
+    if (spaceKey && effectiveSpaces.length) {
+      const match = effectiveSpaces.find((space) => space.key === spaceKey);
+      if (match) {
+        return `${match.name} (${match.key})`;
+      }
+    }
+    return spaceOptions[0]?.value ?? "task (TASK)";
+  }, [defaultSpace, searchParams, effectiveSpaces, spaceOptions]);
+
+  useEffect(() => {
+    if (!open) {
+      setSpaceTouched(false);
+      return;
+    }
+    if (!spaceTouched) {
+      setForm((prev) => ({ ...prev, space: derivedDefaultSpace }));
+    }
+  }, [open, derivedDefaultSpace, spaceTouched]);
+
+  useEffect(() => {
+    if (spaces.length || internalSpaces.length) {
+      return;
+    }
+    const loadSpaces = async () => {
+      try {
+        const res = await fetch(`${apiBase}/spaces?limit=50`, {
+          credentials: "include",
+        });
+        if (!res.ok) {
+          return;
+        }
+        const data = await res.json();
+        if (!Array.isArray(data.spaces)) {
+          return;
+        }
+        setInternalSpaces(
+          data.spaces.map((space: any) => ({
+            name: space.name,
+            key: space.key,
+          }))
+        );
+      } catch {
+        // ignore
+      }
+    };
+    loadSpaces();
+  }, [apiBase, spaces.length, internalSpaces.length]);
 
   const handleSubmit = async () => {
     if (!form.summary.trim()) {
@@ -123,14 +206,26 @@ export function CreateTaskModal({ open, onClose }: CreateTaskModalProps) {
                 <label className="text-xs text-zinc-400">
                   Space <span className="text-rose-300">*</span>
                 </label>
-                <select
-                  className="mt-2 w-full rounded-xl border border-white/10 bg-[#23252a] px-3 py-2 text-sm text-zinc-100"
-                  value={form.space}
-                  onChange={(event) => updateForm("space", event.target.value)}
-                >
-                  <option>task (TASK)</option>
-                  <option>platform (PLAT)</option>
-                </select>
+                {lockSpace ? (
+                  <div className="mt-2 w-full rounded-xl border border-white/10 bg-[#23252a] px-3 py-2 text-sm text-zinc-200">
+                    {form.space}
+                  </div>
+                ) : (
+                  <select
+                    className="mt-2 w-full rounded-xl border border-white/10 bg-[#23252a] px-3 py-2 text-sm text-zinc-100"
+                    value={form.space}
+                    onChange={(event) => {
+                      setSpaceTouched(true);
+                      updateForm("space", event.target.value);
+                    }}
+                  >
+                    {spaceOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               <div>

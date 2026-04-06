@@ -8,12 +8,16 @@ type DashboardHeaderProps = {
   loading: boolean;
   email: string | null;
   title: string;
+  defaultSpace?: string;
+  lockSpace?: boolean;
 };
 
 export function DashboardHeader({
   loading,
   email,
   title,
+  defaultSpace,
+  lockSpace,
 }: DashboardHeaderProps) {
   const router = useRouter();
   const apiBase = process.env.NEXT_PUBLIC_API_URL || "";
@@ -253,7 +257,12 @@ export function DashboardHeader({
         </div>
         </div>
       </header>
-      <CreateTaskModal open={createOpen} onClose={() => setCreateOpen(false)} />
+      <CreateTaskModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        defaultSpace={defaultSpace}
+        lockSpace={lockSpace}
+      />
     </>
   );
 }
