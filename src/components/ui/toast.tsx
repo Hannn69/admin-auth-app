@@ -50,6 +50,20 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener("task:deleted", handler);
   }, [push]);
 
+  useEffect(() => {
+    const handler = () =>
+      push("Space has been created successfully.", "success");
+    window.addEventListener("space:created", handler);
+    return () => window.removeEventListener("space:created", handler);
+  }, [push]);
+
+  useEffect(() => {
+    const handler = () =>
+      push("Space has been updated successfully.", "success");
+    window.addEventListener("space:updated", handler);
+    return () => window.removeEventListener("space:updated", handler);
+  }, [push]);
+
   const value = useMemo(() => ({ push }), [push]);
 
   return (

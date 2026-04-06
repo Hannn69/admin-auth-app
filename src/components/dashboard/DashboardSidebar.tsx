@@ -7,6 +7,7 @@ export function DashboardSidebar() {
   const pathname = usePathname();
   const navItems = [
     { label: "Home", href: "/dashboard" },
+    { label: "Spaces", href: "/spaces" },
     { label: "Task management", href: "/task-management" },
   ];
 
