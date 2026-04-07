@@ -133,8 +133,10 @@ export function TaskManagementContent({
 }: TaskManagementContentProps) {
   const searchParams = useSearchParams();
   const apiBase = process.env.NEXT_PUBLIC_API_URL || "";
-  const [tasks, setTasks] = useState<typeof seedTasks>(seedTasks);
-  const [total, setTotal] = useState(seedTasks.length);
+  const [tasks, setTasks] = useState<typeof seedTasks>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(5);
   const [sort, setSort] = useState("updatedAt");
@@ -213,7 +215,10 @@ export function TaskManagementContent({
   }, [apiBase, spacesLoaded]);
 
   useEffect(() => {
+    let active = true;
     const loadTasks = async () => {
+      setLoading(true);
+      setLoadError(null);
       try {
         const params = new URLSearchParams({
           page: String(page),
@@ -234,11 +239,11 @@ export function TaskManagementContent({
           credentials: "include",
         });
         if (!res.ok) {
-          return;
+          throw new Error("Failed to load tasks.");
         }
         const data = await res.json();
         if (!Array.isArray(data.tasks)) {
-          return;
+          throw new Error("Invalid tasks response.");
         }
         const mapped = data.tasks.map((task: any) => ({
           key: task.key,
@@ -258,14 +263,25 @@ export function TaskManagementContent({
           category: task.category ?? "",
           team: task.team ?? "",
         }));
+        if (!active) {
+          return;
+        }
         setTasks(mapped);
         if (typeof data.total === "number") {
           setTotal(data.total);
         } else {
           setTotal(mapped.length);
         }
-      } catch {
-        // keep seed tasks on failure
+      } catch (err) {
+        if (active) {
+          setTasks([]);
+          setTotal(0);
+          setLoadError(err instanceof Error ? err.message : "Failed to load.");
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
       }
     };
 
@@ -275,6 +291,7 @@ export function TaskManagementContent({
     window.addEventListener("task:updated", handler);
     window.addEventListener("task:deleted", handler);
     return () => {
+      active = false;
       window.removeEventListener("task:created", handler);
       window.removeEventListener("task:updated", handler);
       window.removeEventListener("task:deleted", handler);
@@ -408,6 +425,26 @@ export function TaskManagementContent({
                 </TableRow>
               </TableHeader>
               <TableBody className="divide-y divide-white/10">
+                {loading ? (
+                  <TableRow className="border-white/10">
+                    <TableCell
+                      colSpan={7}
+                      className="px-5 py-6 text-sm text-zinc-500"
+                    >
+                      Loading tasks...
+                    </TableCell>
+                  </TableRow>
+                ) : null}
+                {!loading && !tasks.length ? (
+                  <TableRow className="border-white/10">
+                    <TableCell
+                      colSpan={7}
+                      className="px-5 py-6 text-sm text-zinc-500"
+                    >
+                      No tasks found.
+                    </TableCell>
+                  </TableRow>
+                ) : null}
                 {tasks.map((task, index) => (
                   <TableRow
                     key={task.key}
@@ -525,6 +562,9 @@ export function TaskManagementContent({
           </div>
         </div>
       </div>
+      {loadError ? (
+        <p className="text-xs text-rose-300">{loadError}</p>
+      ) : null}
       <UpdateTaskModal
         open={!!editTask}
         task={editTask}

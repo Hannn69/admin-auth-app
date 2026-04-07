@@ -27,6 +27,7 @@ export function SpaceSettingsContent({ spaceId }: SpaceSettingsContentProps) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isOwner, setIsOwner] = useState(false);
   const [form, setForm] = useState({
     name: "",
     key: "",
@@ -61,6 +62,7 @@ export function SpaceSettingsContent({ spaceId }: SpaceSettingsContentProps) {
             owner: space?.owner ?? space?.lead ?? "",
             defaultAssignee: space?.defaultAssignee ?? "Unassigned",
           });
+          setIsOwner(Boolean(data.isOwner));
         }
       } catch (err) {
         if (active) {
@@ -157,19 +159,26 @@ export function SpaceSettingsContent({ spaceId }: SpaceSettingsContentProps) {
           </div>
 
           <nav className="mt-6 flex flex-col gap-1 text-sm">
-            {settingsNav.map((item, index) => (
-              <button
-                key={item}
-                type="button"
-                className={`rounded-lg px-3 py-2 text-left text-xs transition ${
-                  index === 0
-                    ? "bg-blue-500/15 text-blue-200"
-                    : "text-zinc-300 hover:bg-white/5 hover:text-white"
-                }`}
-              >
-                {item}
-              </button>
-            ))}
+            {settingsNav.map((item, index) => {
+              const href =
+                item === "Access"
+                  ? `/spaces/${spaceId}/settings/access`
+                  : `/spaces/${spaceId}/settings`;
+              const isActive = item === "Details";
+              return (
+                <Link
+                  key={item}
+                  href={href}
+                  className={`rounded-lg px-3 py-2 text-left text-xs transition ${
+                    isActive
+                      ? "bg-blue-500/15 text-blue-200"
+                      : "text-zinc-300 hover:bg-white/5 hover:text-white"
+                  }`}
+                >
+                  {item}
+                </Link>
+              );
+            })}
           </nav>
         </aside>
 
@@ -211,7 +220,7 @@ export function SpaceSettingsContent({ spaceId }: SpaceSettingsContentProps) {
                     onChange={(event) =>
                       updateForm("name", event.target.value)
                     }
-                    disabled={loading || saving}
+                    disabled={loading || saving || !isOwner}
                   />
                 </div>
 
@@ -225,7 +234,7 @@ export function SpaceSettingsContent({ spaceId }: SpaceSettingsContentProps) {
                     onChange={(event) =>
                       updateForm("key", event.target.value)
                     }
-                    disabled={loading || saving}
+                    disabled={loading || saving || !isOwner}
                   />
                 </div>
 
@@ -237,7 +246,7 @@ export function SpaceSettingsContent({ spaceId }: SpaceSettingsContentProps) {
                     onChange={(event) =>
                       updateForm("category", event.target.value)
                     }
-                    disabled={loading || saving}
+                    disabled={loading || saving || !isOwner}
                   >
                     <option value="">Choose a category</option>
                     <option>Engineering</option>
@@ -254,7 +263,7 @@ export function SpaceSettingsContent({ spaceId }: SpaceSettingsContentProps) {
                     onChange={(event) =>
                       updateForm("owner", event.target.value)
                     }
-                    disabled={loading || saving}
+                    disabled={loading || saving || !isOwner}
                   >
                     {ownerOptions.map((option) => (
                       <option key={option}>{option}</option>
@@ -276,7 +285,7 @@ export function SpaceSettingsContent({ spaceId }: SpaceSettingsContentProps) {
                     onChange={(event) =>
                       updateForm("defaultAssignee", event.target.value)
                     }
-                    disabled={loading || saving}
+                    disabled={loading || saving || !isOwner}
                   >
                     <option>Unassigned</option>
                     <option>sonvirak</option>
@@ -284,14 +293,20 @@ export function SpaceSettingsContent({ spaceId }: SpaceSettingsContentProps) {
                   </select>
                 </div>
 
-                <button
-                  type="button"
-                  className="w-fit rounded-lg bg-white/10 px-4 py-2 text-xs font-semibold text-zinc-300 hover:bg-white/15 disabled:opacity-60"
-                  onClick={handleSave}
-                  disabled={loading || saving}
-                >
-                  {saving ? "Saving..." : "Save"}
-                </button>
+                {isOwner ? (
+                  <button
+                    type="button"
+                    className="w-fit rounded-lg bg-white/10 px-4 py-2 text-xs font-semibold text-zinc-300 hover:bg-white/15 disabled:opacity-60"
+                    onClick={handleSave}
+                    disabled={loading || saving}
+                  >
+                    {saving ? "Saving..." : "Save"}
+                  </button>
+                ) : (
+                  <p className="text-xs text-zinc-500">
+                    Only the space owner can edit settings.
+                  </p>
+                )}
                 {error ? (
                   <p className="text-xs text-rose-300">{error}</p>
                 ) : null}

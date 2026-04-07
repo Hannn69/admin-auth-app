@@ -27,7 +27,16 @@ export default function SigninPage() {
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Login failed.");
+        const serverError = data.error || "Login failed.";
+        let message = serverError;
+        if (
+          serverError === "Email is incorrect." &&
+          email.trim() &&
+          password.trim()
+        ) {
+          message = "Email and password are incorrect.";
+        }
+        throw new Error(message);
       }
 
       router.replace("/dashboard");

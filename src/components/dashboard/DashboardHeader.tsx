@@ -3,6 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CreateTaskModal } from "@/components/dashboard/CreateTaskModal";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 type DashboardHeaderProps = {
   loading: boolean;
@@ -24,8 +32,22 @@ export function DashboardHeader({
   const menuRef = useRef<HTMLDivElement | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
+  const [invites, setInvites] = useState<
+    Array<{
+      id: number;
+      token: string;
+      space: { id: number; name: string; key: string };
+      email: string;
+    }>
+  >([]);
+  const [loadingInvites, setLoadingInvites] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [notifications, setNotifications] = useState<
+    Array<{ id: number; message: string; read: boolean; createdAt: string }>
+  >([]);
 
   useEffect(() => {
     if (!menuOpen) {
@@ -143,6 +165,98 @@ export function DashboardHeader({
     },
   ];
 
+  const loadInvites = async () => {
+    setLoadingInvites(true);
+    setInviteError(null);
+    try {
+      const res = await fetch(`${apiBase}/space/invites`, {
+        credentials: "include",
+      });
+      if (!res.ok) {
+        throw new Error("Failed to load invites.");
+      }
+      const data = await res.json();
+      setInvites(Array.isArray(data.invites) ? data.invites : []);
+    } catch (err) {
+      setInviteError(err instanceof Error ? err.message : "Failed to load.");
+    } finally {
+      setLoadingInvites(false);
+    }
+  };
+
+  const loadNotifications = async () => {
+    try {
+      const res = await fetch(`${apiBase}/notifications`, {
+        credentials: "include",
+      });
+      if (!res.ok) {
+        return;
+      }
+      const data = await res.json();
+      setNotifications(
+        Array.isArray(data.notifications) ? data.notifications : []
+      );
+    } catch {
+      // ignore
+    }
+  };
+
+  const markNotificationsRead = async () => {
+    try {
+      await fetch(`${apiBase}/notifications/read-all`, {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch {
+      // ignore
+    }
+  };
+
+  useEffect(() => {
+    let active = true;
+    const poll = async () => {
+      if (!active) {
+        return;
+      }
+      await loadInvites();
+      await loadNotifications();
+    };
+    poll();
+    const interval = window.setInterval(poll, 30000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [apiBase]);
+
+  const handleAcceptInvite = async (token: string) => {
+    try {
+      await fetch(`${apiBase}/space/invite/accept`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
+      });
+      loadInvites();
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleDeclineInvite = async (token: string) => {
+    try {
+      await fetch(`${apiBase}/space/invite/decline`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
+      });
+      loadInvites();
+    } catch {
+      // ignore
+    }
+  };
+
   return (
     <>
       <header className="relative z-30 flex flex-col gap-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-4 shadow-[0_15px_60px_-50px_rgba(0,0,0,0.9)] backdrop-blur sm:px-6">
@@ -197,11 +311,26 @@ export function DashboardHeader({
           {topIcons.map((item) => (
             <button
               key={item.label}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-xs text-zinc-200 transition hover:bg-white/10"
+              className="relative flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-xs text-zinc-200 transition hover:bg-white/10"
               type="button"
               aria-label={item.label}
+              onClick={
+                item.label === "Notifications"
+                  ? () => {
+                      setNotificationsOpen(true);
+                      loadInvites();
+                      loadNotifications();
+                      markNotificationsRead();
+                    }
+                  : undefined
+              }
             >
               {item.svg}
+              {item.label === "Notifications" &&
+              (invites.length > 0 ||
+                notifications.some((note) => !note.read)) ? (
+                <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-rose-500" />
+              ) : null}
             </button>
           ))}
           <div className="relative" ref={menuRef}>
@@ -263,6 +392,99 @@ export function DashboardHeader({
         defaultSpace={defaultSpace}
         lockSpace={lockSpace}
       />
+      <Dialog
+        open={notificationsOpen}
+        onOpenChange={(value) => {
+          if (!value) {
+            setNotificationsOpen(false);
+          }
+        }}
+      >
+        <DialogContent className="max-w-md p-0">
+          <div className="flex flex-col">
+            <DialogHeader className="border-b border-white/10 px-5 py-4">
+              <DialogTitle>Notifications</DialogTitle>
+              <DialogDescription>
+                Recent activity and invites.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="px-5 py-4 text-sm text-zinc-300">
+              {loadingInvites ? (
+                <p className="text-sm text-zinc-500">Loading invites...</p>
+              ) : invites.length || notifications.length ? (
+                <div className="flex flex-col gap-3">
+                  {invites.map((invite) => (
+                    <div
+                      key={invite.id}
+                      className="rounded-xl border border-white/10 bg-white/5 px-3 py-3"
+                    >
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-semibold text-zinc-100">
+                          Space invite
+                        </p>
+                        <span className="text-[11px] text-zinc-500">
+                          {invite.space?.key}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-zinc-400">
+                        You were invited to {invite.space?.name}.
+                      </p>
+                      <div className="mt-3 flex items-center gap-2">
+                        <button
+                          type="button"
+                          className="rounded-full bg-blue-500 px-3 py-1 text-xs text-white hover:bg-blue-400"
+                          onClick={() => handleAcceptInvite(invite.token)}
+                        >
+                          Accept
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded-full border border-white/10 px-3 py-1 text-xs text-zinc-200 hover:bg-white/10"
+                          onClick={() => handleDeclineInvite(invite.token)}
+                        >
+                          Decline
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {notifications.map((note) => (
+                    <div
+                      key={`note-${note.id}`}
+                      className="rounded-xl border border-white/10 bg-white/5 px-3 py-3"
+                    >
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-semibold text-zinc-100">
+                          Space update
+                        </p>
+                        <span className="text-[11px] text-zinc-500">
+                          {new Date(note.createdAt).toLocaleString()}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-zinc-400">
+                        {note.message}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-zinc-500">No notifications yet.</p>
+              )}
+              {inviteError ? (
+                <p className="mt-3 text-xs text-rose-300">{inviteError}</p>
+              ) : null}
+            </div>
+            <DialogFooter className="border-t border-white/10 px-5 py-4 text-xs text-zinc-400 sm:items-center sm:justify-end">
+              <button
+                type="button"
+                className="rounded-full border border-white/10 px-4 py-2 text-xs text-zinc-300 hover:bg-white/10"
+                onClick={() => setNotificationsOpen(false)}
+              >
+                Close
+              </button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
